@@ -1,19 +1,13 @@
 const std = @import("std");
+const root = @import("root.zig");
 
-// todo:
-// argparse and python script + file handling
-// build system explore
-// comments
-// prime numbers
-// yay
-
-const M = 1000;
-const N = 600;
-const P = 10;
+var M: usize = 1024;
+var N: usize = 1024;
+var P: usize = 1024;
 
 var NUM_THREADS: usize = undefined;
 
-const Schedule = enum { sequential, chunked, cyclic, dynamic };
+const Schedule = root.Schedule;
 
 const Matrix = struct {
     rows: usize,
@@ -217,8 +211,11 @@ pub fn compute_row(
     }
 }
 
-pub fn main() !void {
-    NUM_THREADS = try std.Thread.getCpuCount();
+pub fn run(schedule: Schedule, m: usize, n: usize, p: usize, num_threads: usize) !void {
+    NUM_THREADS = num_threads;
+    M = m;
+    N = n;
+    P = p;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -241,48 +238,17 @@ pub fn main() !void {
 
     var timer = try std.time.Timer.start();
 
-    // Sequential
-    std.debug.print("\n--- Case 0: Sequential ---\n", .{});
-    var sched_seq = try Scheduler.init(al, &mat_A, &mat_B, 1, .sequential);
-    defer sched_seq.deinit(al);
+    std.debug.print("\n---------EVALUATING---------\n", .{});
+    var sched = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, schedule);
+    defer sched.deinit(al);
 
     timer.reset();
-    try sched_seq.compute_matrix();
-    const t_seq = timer.read();
-    sched_seq.mat_C.print();
-
-    // Chunked
-    std.debug.print("\n--- Case 1: Chunked ---\n", .{});
-    var sched_chunk = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .chunked);
-    defer sched_chunk.deinit(al);
-
-    timer.reset();
-    try sched_chunk.compute_matrix();
-    const t_chunk = timer.read();
-    sched_chunk.mat_C.print();
-
-    // Cyclic
-    std.debug.print("\n--- Case 2: Cyclic ---\n", .{});
-    var sched_cyc = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .cyclic);
-    defer sched_cyc.deinit(al);
-
-    timer.reset();
-    try sched_cyc.compute_matrix();
-    const t_cyc = timer.read();
-    sched_cyc.mat_C.print();
-
-    // Dynamic
-    std.debug.print("\n--- Case 3: Dynamic ---\n", .{});
-    var sched_dyn = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .dynamic);
-    defer sched_dyn.deinit(al);
-
-    timer.reset();
-    try sched_dyn.compute_matrix();
-    const t_dyn = timer.read();
-    sched_dyn.mat_C.print();
+    try sched.compute_matrix();
+    const time = timer.read();
+    sched.mat_C.print();
 
     std.debug.print(
-        "\nTiming (ns):\n  Sequential: {d}\n  Chunked:    {d}\n  Cyclic:     {d}\n  Dynamic:    {d}\n",
-        .{ t_seq, t_chunk, t_cyc, t_dyn },
+        "\nTiming (ns): {d}",
+        .{time},
     );
 }

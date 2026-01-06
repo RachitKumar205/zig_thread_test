@@ -1,0 +1,15 @@
+{
+  "n_threads": 16,
+  "matrix": {
+    "run": false,
+    "schedule": "sequential",
+    "M": 1024,
+    "N": 1024,
+    "P": 1024
+  },
+  "prime": {
+    "run": true,
+    "schedule": "sequential",
+    "N": 1
+  }
+}

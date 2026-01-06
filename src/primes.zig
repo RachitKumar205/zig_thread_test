@@ -1,9 +1,10 @@
 const std = @import("std");
+const root = @import("root.zig");
 
-const N: usize = 100000000;
+var N: usize = 100000000;
 var NUM_THREADS: usize = undefined;
 
-const Schedule = enum { sequential, chunked, cyclic, dynamic };
+const Schedule = root.Schedule;
 
 const Scheduler = struct {
     threads: []std.Thread,
@@ -166,8 +167,9 @@ pub fn is_prime(
     _ = prime_count_ref.fetchAdd(1, .monotonic);
 }
 
-pub fn main() !void {
-    NUM_THREADS = try std.Thread.getCpuCount();
+pub fn run(schedule: Schedule, n: usize, num_threads: usize) !void {
+    NUM_THREADS = num_threads;
+    N = n;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -175,52 +177,18 @@ pub fn main() !void {
 
     var timer = try std.time.Timer.start();
 
-    // Sequential
-    std.debug.print("\n--- Case 0: Sequential ---\n", .{});
-    var sched_seq = try Scheduler.init(al, 1, N, .sequential);
-    defer sched_seq.deinit(al);
+    std.debug.print("\n--------EVALUATING---------\n", .{});
+    var seq = try Scheduler.init(al, NUM_THREADS, N, schedule);
+    defer seq.deinit(al);
 
     timer.reset();
-    try sched_seq.compute_primes();
-    const t_seq = timer.read();
-    const c_seq = sched_seq.prime_count.load(.monotonic);
-    std.debug.print("Primes ≤ {d}: {d}\n", .{ N, c_seq });
-
-    // Chunked
-    std.debug.print("\n--- Case 1: Chunked ---\n", .{});
-    var sched_chunk = try Scheduler.init(al, NUM_THREADS, N, .chunked);
-    defer sched_chunk.deinit(al);
-
-    timer.reset();
-    try sched_chunk.compute_primes();
-    const t_chunk = timer.read();
-    const c_chunk = sched_chunk.prime_count.load(.monotonic);
-    std.debug.print("Primes ≤ {d}: {d}\n", .{ N, c_chunk });
-
-    // Cyclic
-    std.debug.print("\n--- Case 2: Cyclic ---\n", .{});
-    var sched_cyc = try Scheduler.init(al, NUM_THREADS, N, .cyclic);
-    defer sched_cyc.deinit(al);
-
-    timer.reset();
-    try sched_cyc.compute_primes();
-    const t_cyc = timer.read();
-    const c_cyc = sched_cyc.prime_count.load(.monotonic);
-    std.debug.print("Primes ≤ {d}: {d}\n", .{ N, c_cyc });
-
-    // Dynamic
-    std.debug.print("\n--- Case 3: Dynamic ---\n", .{});
-    var sched_dyn = try Scheduler.init(al, NUM_THREADS, N, .dynamic);
-    defer sched_dyn.deinit(al);
-
-    timer.reset();
-    try sched_dyn.compute_primes();
-    const t_dyn = timer.read();
-    const c_dyn = sched_dyn.prime_count.load(.monotonic);
-    std.debug.print("Primes ≤ {d}: {d}\n", .{ N, c_dyn });
+    try seq.compute_primes();
+    const time = timer.read();
+    const count = seq.prime_count.load(.monotonic);
+    std.debug.print("Primes ≤ {d}: {d}\n", .{ N, count });
 
     std.debug.print(
-        "\nTiming (ns):\n  Sequential: {d}\n  Chunked:    {d}\n  Cyclic:     {d}\n  Dynamic:    {d}\n",
-        .{ t_seq, t_chunk, t_cyc, t_dyn },
+        "\nTiming (ns): {d}",
+        .{time},
     );
 }

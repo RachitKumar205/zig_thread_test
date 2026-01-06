@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
     // module they want to access.
-    const mod = b.addModule("lab_1_matmul", .{
+    const mod = b.addModule("zig_thread_test", .{
         // The root source file is the "entry point" of this module. Users of
         // this module will only be able to access public declarations contained
         // in this file, which means that if you have declarations that you
@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
     // If neither case applies to you, feel free to delete the declaration you
     // don't need and to put everything under a single module.
     const exe = b.addExecutable(.{
-        .name = "lab_1_matmul",
+        .name = "zig_thread_test",
         .root_module = b.createModule(.{
             // b.createModule defines a new module just like b.addModule but,
             // unlike b.addModule, it does not expose the module to consumers of
@@ -73,12 +73,12 @@ pub fn build(b: *std.Build) void {
             // List of modules available for import in source files part of the
             // root module.
             .imports = &.{
-                // Here "lab_1_matmul" is the name you will use in your source code to
-                // import this module (e.g. `@import("lab_1_matmul")`). The name is
+                // Here "zig_thread_test" is the name you will use in your source code to
+                // import this module (e.g. `@import("zig_thread_test")`). The name is
                 // repeated because you are allowed to rename your imports, which
                 // can be extremely useful in case of collisions (which can happen
                 // importing modules from different packages).
-                .{ .name = "lab_1_matmul", .module = mod },
+                .{ .name = "zig_thread_test", .module = mod },
             },
         }),
     });
