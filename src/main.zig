@@ -1,19 +1,19 @@
 const std = @import("std");
 
 // todo:
-// clean up printing
-// enum for case
-// actually write other two cases
-// more robust scheduler
+// argparse and python script + file handling
 // build system explore
+// comments
 // prime numbers
 // yay
 
-const M = 400;
-const N = 400;
-const P = 400;
+const M = 1000;
+const N = 600;
+const P = 10;
 
 var NUM_THREADS: usize = undefined;
+
+const Schedule = enum { sequential, chunked, cyclic, dynamic };
 
 const Matrix = struct {
     rows: usize,
@@ -51,55 +51,110 @@ const Matrix = struct {
 };
 
 const Scheduler = struct {
-    status: []bool,
     threads: []std.Thread,
     mat_A: *const Matrix,
     mat_B: *const Matrix,
     mat_C: Matrix,
+    mode: Schedule,
 
-    pub fn init(al: std.mem.Allocator, mat_A: *const Matrix, mat_B: *const Matrix, num_threads: usize) !Scheduler {
-        const status_buf = try al.alloc(bool, mat_A.rows);
+    pub fn init(
+        al: std.mem.Allocator,
+        mat_A: *const Matrix,
+        mat_B: *const Matrix,
+        num_threads: usize,
+        mode: Schedule,
+    ) !Scheduler {
         const threads_buf = try al.alloc(std.Thread, num_threads);
 
-        @memset(status_buf, false);
-
         return Scheduler{
-            .status = status_buf,
             .threads = threads_buf,
             .mat_A = mat_A,
             .mat_B = mat_B,
             .mat_C = try Matrix.init(al, mat_A.rows, mat_B.cols),
+            .mode = mode,
         };
     }
 
     pub fn deinit(self: *Scheduler, al: std.mem.Allocator) void {
-        al.free(self.status);
         al.free(self.threads);
         self.mat_C.deinit(al);
         self.* = undefined;
     }
 
     pub fn compute_matrix(self: *Scheduler) !void {
+        switch (self.mode) {
+            .sequential => self.compute_matrix_sequential(),
+            .chunked => try self.compute_matrix_chunked(),
+            .cyclic => try self.compute_matrix_cyclic(),
+            .dynamic => try self.compute_matrix_dynamic(),
+        }
+    }
+
+    pub fn compute_matrix_sequential(self: *Scheduler) void {
+        for (0..self.mat_C.rows) |row| {
+            compute_row(self.mat_A, self.mat_B, &self.mat_C, row);
+        }
+    }
+
+    pub fn compute_matrix_chunked(self: *Scheduler) !void {
         const max_threads = @min(NUM_THREADS, self.mat_C.rows);
         const chunk_size = self.mat_C.rows / max_threads;
 
-        for (0..max_threads) |i| {
-            const start_row = i * chunk_size;
-            const end_row = if (i == max_threads - 1)
+        for (0..max_threads) |id| {
+            const start_row = id * chunk_size;
+            const end_row = if (id == max_threads - 1)
                 self.mat_C.rows
             else
                 start_row + chunk_size;
 
-            const thread = try std.Thread.spawn(.{}, compute_rows, .{
+            const thread = try std.Thread.spawn(.{}, compute_rows_chunked, .{
                 self.mat_A,
                 self.mat_B,
-                &(self.mat_C),
+                &self.mat_C,
                 start_row,
                 end_row,
-                self.status,
             });
 
-            self.threads[i] = thread;
+            self.threads[id] = thread;
+        }
+
+        for (self.threads[0..max_threads]) |thread| {
+            thread.join();
+        }
+    }
+
+    pub fn compute_matrix_cyclic(self: *Scheduler) !void {
+        const max_threads = @min(NUM_THREADS, self.mat_C.rows);
+        for (0..max_threads) |id| {
+            const thread = try std.Thread.spawn(.{}, compute_rows_cyclic, .{
+                self.mat_A,
+                self.mat_B,
+                &self.mat_C,
+                max_threads,
+                id,
+            });
+
+            self.threads[id] = thread;
+        }
+
+        for (self.threads[0..max_threads]) |thread| {
+            thread.join();
+        }
+    }
+
+    pub fn compute_matrix_dynamic(self: *Scheduler) !void {
+        const max_threads = @min(NUM_THREADS, self.mat_C.rows);
+        var atomic_counter = std.atomic.Value(usize).init(0);
+
+        for (0..max_threads) |id| {
+            const thread = try std.Thread.spawn(.{}, compute_rows_dynamic, .{
+                self.mat_A,
+                self.mat_B,
+                &self.mat_C,
+                &atomic_counter,
+            });
+
+            self.threads[id] = thread;
         }
 
         for (self.threads[0..max_threads]) |thread| {
@@ -108,24 +163,57 @@ const Scheduler = struct {
     }
 };
 
-pub fn compute_rows(
+pub fn compute_rows_chunked(
     mat_A: *const Matrix,
     mat_B: *const Matrix,
     mat_C: *Matrix,
     start_row: usize,
     end_row: usize,
-    row_status: []bool,
 ) void {
     for (start_row..end_row) |row| {
-        for (0..mat_B.cols) |j| {
-            var sum: i32 = 0;
-            for (0..mat_A.cols) |k| {
-                sum += mat_A.at(row, k).* * mat_B.at(k, j).*;
-            }
-            mat_C.at(row, j).* = sum;
-        }
+        compute_row(mat_A, mat_B, mat_C, row);
+    }
+}
 
-        row_status[row] = true;
+pub fn compute_rows_cyclic(
+    mat_A: *const Matrix,
+    mat_B: *const Matrix,
+    mat_C: *Matrix,
+    interval: usize,
+    thread_id: usize,
+) void {
+    var row = thread_id;
+    while (row < mat_A.rows) : (row += interval) {
+        compute_row(mat_A, mat_B, mat_C, row);
+    }
+}
+
+pub fn compute_rows_dynamic(
+    mat_A: *const Matrix,
+    mat_B: *const Matrix,
+    mat_C: *Matrix,
+    counter: *std.atomic.Value(usize),
+) void {
+    const num_rows = mat_C.rows;
+    while (true) {
+        const row = counter.fetchAdd(1, .monotonic);
+        if (row >= num_rows) break;
+        compute_row(mat_A, mat_B, mat_C, row);
+    }
+}
+
+pub fn compute_row(
+    mat_A: *const Matrix,
+    mat_B: *const Matrix,
+    mat_C: *Matrix,
+    row: usize,
+) void {
+    for (0..mat_B.cols) |j| {
+        var sum: i32 = 0;
+        for (0..mat_A.cols) |k| {
+            sum += mat_A.at(row, k).* * mat_B.at(k, j).*;
+        }
+        mat_C.at(row, j).* = sum;
     }
 }
 
@@ -146,15 +234,55 @@ pub fn main() !void {
     defer mat_B.deinit(al);
     mat_B.fill_random(rng);
 
-    Matrix.print(&mat_A);
-    Matrix.print(&mat_B);
+    std.debug.print("Matrix A:\n", .{});
+    mat_A.print();
+    std.debug.print("Matrix B:\n", .{});
+    mat_B.print();
 
-    var scheduler = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS);
-    defer Scheduler.deinit(&scheduler, al);
+    var timer = try std.time.Timer.start();
 
-    const a = mat_A.at(2, 3);
-    std.debug.print("{}", .{a.*});
+    // Sequential
+    std.debug.print("\n--- Case 0: Sequential ---\n", .{});
+    var sched_seq = try Scheduler.init(al, &mat_A, &mat_B, 1, .sequential);
+    defer sched_seq.deinit(al);
 
-    try scheduler.compute_matrix();
-    scheduler.mat_C.print();
+    timer.reset();
+    try sched_seq.compute_matrix();
+    const t_seq = timer.read();
+    sched_seq.mat_C.print();
+
+    // Chunked
+    std.debug.print("\n--- Case 1: Chunked ---\n", .{});
+    var sched_chunk = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .chunked);
+    defer sched_chunk.deinit(al);
+
+    timer.reset();
+    try sched_chunk.compute_matrix();
+    const t_chunk = timer.read();
+    sched_chunk.mat_C.print();
+
+    // Cyclic
+    std.debug.print("\n--- Case 2: Cyclic ---\n", .{});
+    var sched_cyc = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .cyclic);
+    defer sched_cyc.deinit(al);
+
+    timer.reset();
+    try sched_cyc.compute_matrix();
+    const t_cyc = timer.read();
+    sched_cyc.mat_C.print();
+
+    // Dynamic
+    std.debug.print("\n--- Case 3: Dynamic ---\n", .{});
+    var sched_dyn = try Scheduler.init(al, &mat_A, &mat_B, NUM_THREADS, .dynamic);
+    defer sched_dyn.deinit(al);
+
+    timer.reset();
+    try sched_dyn.compute_matrix();
+    const t_dyn = timer.read();
+    sched_dyn.mat_C.print();
+
+    std.debug.print(
+        "\nTiming (ns):\n  Sequential: {d}\n  Chunked:    {d}\n  Cyclic:     {d}\n  Dynamic:    {d}\n",
+        .{ t_seq, t_chunk, t_cyc, t_dyn },
+    );
 }
