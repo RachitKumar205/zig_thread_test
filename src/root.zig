@@ -36,7 +36,7 @@ fn parseSchedule(s: []const u8) !Schedule {
     return std.meta.stringToEnum(Schedule, s) orelse Err.InvalidConfig;
 }
 
-pub fn main() !void {
+pub fn run() !void {
     const file = try fs.cwd().openFile("../config.json", .{});
     defer file.close();
 
