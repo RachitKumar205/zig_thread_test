@@ -37,7 +37,7 @@ fn parseSchedule(s: []const u8) !Schedule {
 }
 
 pub fn run() !void {
-    const file = try fs.cwd().openFile("../config.json", .{});
+    const file = try fs.cwd().openFile("config.json", .{});
     defer file.close();
 
     var file_buffer: [4096]u8 = undefined;
