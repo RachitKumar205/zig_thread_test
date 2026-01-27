@@ -1,5 +1,5 @@
 # CSD359 - Lab Assignment 1
-- The zig code is availble in the `src/` directory
+- The zig project is availble in the `zig_thread_test/` directory; it needs to be named this way to match the build script. The source code is available in `zig_thread_test/src`.
 
 ## Running Locally
 1. Ensure `Zig v0.15.2` is availble on your system:
