@@ -1,0 +1,6 @@
+zig-out/
+zig-*/
+.zig-cache/
+.venv/
+*.pyc
+__pycache__/
