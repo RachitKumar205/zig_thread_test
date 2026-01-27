@@ -18,9 +18,13 @@ zig build
 ```
 > **NOTE: Ensure that you are in the project root directory (`zig_thread_test`) or the compiler will not be able to find the appropriate build config**
 
-4. The executable is available at `./zig-out/bin/zig_thread_test`, this can be used directly to run single tests. Use the `main.py` file to run a benchmark with varying input parameters.
+4. The executable is available at `./zig-out/bin/zig_thread_test`. Run it by executing, while being in the project root directory (IMPORTANT) `zig_thread_test`:
+```bash
+  zig-out/bin/zig_thread_test
+```
+this can be used directly to run single tests configured to the current `config.json`. Use the `main.py` file to run a benchmark with varying input parameters.
 
-5. To run the `main.py` file, ensure all python dependencies are installed
+6. To run the `main.py` file, ensure all python dependencies are installed
 ```bash
 pip install -r requirements.txt
 # or
