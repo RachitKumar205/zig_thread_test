@@ -231,11 +231,6 @@ pub fn run(schedule: Schedule, m: usize, n: usize, p: usize, num_threads: usize)
     defer mat_B.deinit(al);
     mat_B.fill_random(rng);
 
-    std.debug.print("Matrix A:\n", .{});
-    mat_A.print();
-    std.debug.print("Matrix B:\n", .{});
-    mat_B.print();
-
     var timer = try std.time.Timer.start();
 
     std.debug.print("\n---------EVALUATING---------\n", .{});
@@ -245,7 +240,6 @@ pub fn run(schedule: Schedule, m: usize, n: usize, p: usize, num_threads: usize)
     timer.reset();
     try sched.compute_matrix();
     const time = timer.read();
-    sched.mat_C.print();
 
     std.debug.print(
         "\nTiming (ns): {d}",
